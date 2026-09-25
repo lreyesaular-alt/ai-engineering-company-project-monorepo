@@ -322,12 +322,21 @@ def main() -> None:
         / "process"
         / "incident_analysis_results.csv"
     )
+    export_choice = input(
+        "\n¿Deseas exportar los resultados a CSV? (s/n): "
+    ).strip().lower()
 
-    export_results(
-        valid_df,
-        invalid_breakdown,
-        output_path,
-    )
-    
+    if export_choice == "s":
+        project_root = Path(__file__).resolve().parents[3]
+        output_path = project_root / "results.csv"
+
+        export_results(
+            valid_df,
+            invalid_breakdown,
+            output_path,
+        )
+    else:
+        print("\nExportación omitida.")
+
 if __name__ == "__main__":
     main()
