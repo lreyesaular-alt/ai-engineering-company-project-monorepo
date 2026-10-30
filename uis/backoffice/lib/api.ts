@@ -1,6 +1,8 @@
 ﻿import { clearToken, getToken } from "./auth";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL =
+  process.env.NEXT_PUBLIC_INVENTORY_API_URL ??
+  "http://127.0.0.1:8000";
 
 export async function api(
   path: string,
