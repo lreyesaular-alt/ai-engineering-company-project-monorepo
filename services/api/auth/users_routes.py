@@ -1,7 +1,8 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status
+﻿
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from .dependencies import get_current_user
-from .models import UserPublic, UserUpdate, MessageResponse
+from .models import UserPublic, UserListItem, UserUpdate, MessageResponse
 from .db import get_db
 from .users import delete_user, update_user
 
@@ -14,12 +15,12 @@ def get_my_user(current_user=Depends(get_current_user)):
     return current_user
 
 
-@router.get("/", response_model=list[UserPublic])
+@router.get("/", response_model=list[UserListItem])
 def get_users(current_user=Depends(get_current_user)):
     db = get_db()
     try:
         users = db.all()
-        public_fields = ("id", "email", "is_active", "role", "created_at")
+        public_fields = ("id", "email", "role", "is_active")
 
         return [
             {field: user[field] for field in public_fields if field in user}

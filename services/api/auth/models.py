@@ -14,6 +14,13 @@ class UserPublic(BaseModel):
     created_at: str
 
 
+class UserListItem(BaseModel):
+    id: int
+    email: str
+    role: str
+    is_active: bool
+
+
 class ProfileCreate(BaseModel):
     name: str
     phone: str | None = None

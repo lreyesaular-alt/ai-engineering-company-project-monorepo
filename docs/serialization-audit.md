@@ -1,31 +1,35 @@
-﻿# Backend Serialization Audit
+﻿# Auditoría e implementación de serialización del backend
 
-## 1. Scope
+## 1. Alcance
 
-This audit reviews the FastAPI endpoints in `services/api`, their response schemas, and the protection of sensitive data.
+Esta auditoría revisa los endpoints de FastAPI en `services/api`, sus esquemas de respuesta y la protección de datos sensibles.
 
-## 2. Endpoint inventory
+Los objetivos son identificar los endpoints que no utilizan serialización explícita, implementar esquemas Pydantic adecuados y garantizar que las respuestas de la API expongan únicamente los campos necesarios.
 
-| Endpoint | Method | Purpose | Current serialization |
+## 2. Inventario de endpoints
+
+| Endpoint | Método | Propósito | Serialización actual |
 |---|---|---|---|
-| `/api/health` | GET | API health check | Not serialized |
-| `/api/incidents/analyze` | POST | Analyze incident CSV data | Not serialized |
-| `/auth/register` | POST | Register a user | Properly serialized: `UserPublic` |
-| `/auth/login` | POST | Authenticate a user | Not serialized |
-| `/auth/me` | GET | Retrieve current user | Properly serialized: `UserPublic` |
-| `/auth/forgot-password` | POST | Request password recovery | Not serialized |
-| `/auth/reset-password` | POST | Reset password | Not serialized |
-| `/auth/change-password` | POST | Change password | Not serialized |
-| `/profiles/me` | GET | Retrieve current profile | Properly serialized: `ProfilePublic` |
-| `/profiles/me` | PUT | Create or update current profile | Properly serialized: `ProfilePublic` |
-| `/users/me` | GET | Retrieve current user | Properly serialized: `UserPublic` |
-| `/users/` | GET | List users | Partially serialized: `UserPublic` |
-| `/users/{user_id}` | PUT | Update a user | Properly serialized: `UserPublic` |
-| `/users/{user_id}` | DELETE | Delete a user | Not serialized |
+| `/api/health` | GET | Comprobar el estado de la API | Serializado: `HealthResponse` |
+| `/api/incidents/analyze` | POST | Analizar datos de incidentes CSV | Serializado: `IncidentAnalysisResponse` |
+| `/auth/register` | POST | Registrar un usuario | Serializado: `UserPublic` |
+| `/auth/login` | POST | Autenticar un usuario | Serializado: `TokenResponse` |
+| `/auth/me` | GET | Obtener el usuario actual | Serializado: `UserPublic` |
+| `/auth/forgot-password` | POST | Solicitar recuperación de contraseña | Serializado: `MessageResponse` |
+| `/auth/reset-password` | POST | Restablecer contraseña | Serializado: `MessageResponse` |
+| `/auth/change-password` | POST | Cambiar contraseña | Serializado: `MessageResponse` |
+| `/profiles/me` | GET | Obtener el perfil actual | Serializado: `ProfilePublic` |
+| `/profiles/me` | PUT | Crear o actualizar el perfil actual | Serializado: `ProfilePublic` |
+| `/users/me` | GET | Obtener los datos del usuario actual | Serializado: `UserPublic` |
+| `/users/` | GET | Listar usuarios | Serializado: `list[UserListItem]` |
+| `/users/{user_id}` | PUT | Actualizar un usuario | Serializado: `UserPublic` |
+| `/users/{user_id}` | DELETE | Eliminar un usuario | Serializado: `MessageResponse` |
 
-## 3. Existing schemas
+## 3. Esquemas Pydantic
 
-The following input schemas already exist:
+### Esquemas de entrada
+
+Se utilizan para validar los datos recibidos por la API:
 
 - `UserCreate`
 - `ProfileCreate`
@@ -34,24 +38,47 @@ The following input schemas already exist:
 - `ResetPasswordRequest`
 - `ChangePasswordRequest`
 
-The following output schemas already exist:
+### Esquemas de salida
 
-- `UserPublic`
-- `ProfilePublic`
+Se utilizan para controlar y validar los datos devueltos por los endpoints:
 
-## 4. Audit findings
+- `UserPublic`: información pública de un usuario.
+- `UserListItem`: información reducida de un usuario para los listados.
+- `ProfilePublic`: información pública de un perfil.
+- `TokenResponse`: respuesta de autenticación con el token de acceso.
+- `MessageResponse`: respuestas que contienen un mensaje.
+- `HealthResponse`: estado del servicio.
+- `IncidentAnalysisResponse`: resultados del análisis de incidentes.
+- `InvalidBreakdown`: desglose de registros inválidos.
 
-### Properly serialized endpoints
+## 4. Hallazgos de la auditoría
 
-Endpoints using `UserPublic` or `ProfilePublic` already define explicit response models. These schemas limit the fields returned by the API.
+### Endpoints correctamente serializados
 
-### Partially serialized endpoints
+Los endpoints que utilizan `UserPublic` o `ProfilePublic` ya disponen de modelos de respuesta explícitos.
 
-`GET /users/` uses `list[UserPublic]`, which filters output fields. However, the route retrieves all database records before serialization. The list response should project only the fields required by the public schema.
+También se han incorporado modelos específicos para las respuestas de autenticación, operaciones con mensajes, estado de la API y análisis de incidentes.
 
-### Endpoints without explicit response models
+### Optimización de endpoints parcialmente serializados
 
-The following endpoints return dictionaries without explicit response schemas:
+El endpoint `GET /users/` se ha optimizado mediante el esquema `UserListItem`.
+
+Anteriormente utilizaba `UserPublic`, que incluía más campos de los necesarios para un listado.
+
+La nueva implementación devuelve únicamente:
+
+- `id`
+- `email`
+- `role`
+- `is_active`
+
+Esto reduce los datos transferidos y evita exponer información innecesaria.
+
+Además, se proyectan explícitamente los campos públicos antes de devolver los resultados.
+
+### Endpoints que inicialmente carecían de modelos de respuesta
+
+Durante la auditoría se identificaron los siguientes endpoints sin modelos de respuesta explícitos:
 
 - `GET /api/health`
 - `POST /api/incidents/analyze`
@@ -61,45 +88,64 @@ The following endpoints return dictionaries without explicit response schemas:
 - `POST /auth/change-password`
 - `DELETE /users/{user_id}`
 
-### Security considerations
+Se implementaron los esquemas correspondientes y se añadieron mediante `response_model`.
 
-- User output schemas must never expose `hashed_password`.
-- The login response must intentionally include its access token.
-- Passwords and reset tokens are input or authentication data, not public user fields.
-- Non-admin users must not be allowed to change their own role or active status. The existing users update route contains checks for these fields.
+### Consideraciones de seguridad
 
-## 5. Implementation plan
+- Los esquemas públicos de usuario no deben exponer `hashed_password`.
+- La respuesta de login incluye intencionadamente el token de acceso.
+- Las contraseñas y los tokens de recuperación se utilizan como datos de entrada o autenticación, no como campos públicos del usuario.
+- Los usuarios que no sean administradores no pueden modificar su propio rol ni su estado de activación mediante la ruta de actualización.
+- Los endpoints de listado devuelven únicamente los campos públicos necesarios.
 
-1. Add explicit response schemas for health checks and incident analysis.
-2. Add a token response schema for login.
-3. Add a message response schema for password operations and user deletion.
-4. Apply `response_model` to endpoints that currently lack it.
-5. Keep input and output schemas separate.
-6. Optimize user list responses to return only public fields.
-7. Run the available API tests.
-8. Verify representative endpoints through FastAPI `/docs`.
+## 5. Implementación realizada
 
-## 6. Test status
+Se realizaron las siguientes mejoras:
 
-The directory `services/api/tests` exists but contains no test files.
+1. Se añadieron esquemas de respuesta explícitos para el estado de la API y el análisis de incidentes.
+2. Se incorporó `TokenResponse` para la autenticación.
+3. Se incorporó `MessageResponse` para las operaciones de contraseña y eliminación de usuarios.
+4. Se añadió `response_model` a los endpoints que carecían de serialización explícita.
+5. Se mantuvieron separados los esquemas de entrada y salida.
+6. Se creó `UserListItem` para optimizar las respuestas del listado de usuarios.
+7. Se limitaron los campos públicos devueltos por los endpoints de usuario.
+8. Se mantuvieron las comprobaciones de permisos para evitar modificaciones no autorizadas.
 
-Automated test execution:
-- Command: `python -m pytest services/api/tests -q`
-- Result: No tests ran because the directory is empty.
+## 6. Pruebas y verificación
 
-Manual API verification through FastAPI Swagger UI:
-- `GET /api/health`: 200 OK.
-- `POST /api/incidents/analyze`: 200 OK. Successfully analyzed 100 records.
-- `POST /auth/forgot-password`: 200 OK. Returned the expected message response.
+El directorio `services/api/tests` existe, pero no contiene archivos de pruebas.
 
-The tested responses matched the expected response schemas.
+### Ejecución de pruebas automatizadas
 
-## 7. Final status
+- Comando: `python -m pytest services/api/tests -q`
+- Resultado: no se ejecutaron pruebas porque el directorio está vacío.
 
-- Endpoint inventory completed.
-- Serialization audit completed.
-- Explicit response schemas implemented.
-- Sensitive user fields excluded from public responses.
-- User list responses optimized to return public fields only.
-- Three API endpoints manually verified through Swagger UI.
-- Automated tests remain unavailable because the API test directory is empty.
+### Verificación manual mediante Swagger UI
+
+Se probaron los siguientes endpoints desde la documentación interactiva de FastAPI (`/docs`):
+
+- `GET /api/health`: respuesta 200 OK.
+- `POST /api/incidents/analyze`: respuesta 200 OK. Se analizaron correctamente 100 registros.
+- `POST /auth/forgot-password`: respuesta 200 OK. Se devolvió el mensaje esperado.
+
+Las respuestas de los endpoints probados coincidieron con los esquemas definidos.
+
+### Comprobación de sintaxis
+
+Se ejecutó:
+
+`python -m compileall services/api`
+
+Resultado: compilación completada sin errores de sintaxis.
+
+## 7. Estado final
+
+- Inventario de endpoints completado.
+- Auditoría de serialización completada.
+- Esquemas Pydantic de entrada y salida definidos.
+- Modelos de respuesta explícitos implementados.
+- Protección de campos sensibles aplicada mediante esquemas públicos.
+- Listado de usuarios optimizado mediante `UserListItem`.
+- Tres endpoints verificados manualmente mediante Swagger UI.
+- Compilación del backend completada correctamente.
+- Pruebas automatizadas no disponibles porque el directorio de tests está vacío.
