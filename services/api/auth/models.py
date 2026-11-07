@@ -1,6 +1,4 @@
-from datetime import datetime, timezone
-
-from pydantic import BaseModel, EmailStr, Field
+﻿from pydantic import BaseModel, EmailStr, Field
 
 
 class UserCreate(BaseModel):
@@ -16,6 +14,21 @@ class UserPublic(BaseModel):
     created_at: str
 
 
+class UserCreatedResponse(BaseModel):
+    id: int
+    email: str
+    is_active: bool
+    role: str
+    created_at: str
+
+
+class UserListItem(BaseModel):
+    id: int
+    email: str
+    role: str
+    is_active: bool
+
+
 class ProfileCreate(BaseModel):
     name: str
     phone: str | None = None
@@ -29,8 +42,39 @@ class ProfilePublic(BaseModel):
     phone: str | None = None
     address: str | None = None
 
+
 class UserUpdate(BaseModel):
     email: EmailStr | None = None
     password: str | None = Field(default=None, min_length=8)
     is_active: bool | None = None
     role: str | None = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str
+
+

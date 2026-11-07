@@ -12,6 +12,7 @@ from services.api.auth.routes import router as auth_router
 from services.api.auth.users_routes import router as users_router
 from services.api.database import engine
 from services.api.models import Incident
+from services.api.response_schemas import HealthResponse, IncidentSummaryResponse, IncidentAnalysisResponse
 from services.api.routers.inventory import router as inventory_router
 
 
@@ -90,7 +91,7 @@ REQUIRED_COLUMNS = {
 # HEALTH CHECK
 # ============================================================
 
-@app.get("/api/health")
+@app.get("/api/health", response_model=HealthResponse)
 def health_check():
     return {
         "status": "ok",
@@ -102,7 +103,7 @@ def health_check():
 # INCIDENTS SUMMARY
 # ============================================================
 
-@app.get("/api/incidents/summary")
+@app.get("/api/incidents/summary", response_model=IncidentSummaryResponse)
 def incidents_summary():
     """
     Devuelve el resumen de incidentes utilizado por el dashboard.
@@ -169,7 +170,7 @@ def incidents_summary():
 # INCIDENTS ANALYSIS
 # ============================================================
 
-@app.post("/api/incidents/analyze")
+@app.post("/api/incidents/analyze", response_model=IncidentAnalysisResponse)
 async def analyze_incidents(
     file: UploadFile = File(...),
 ):
@@ -183,7 +184,7 @@ async def analyze_incidents(
         contents = await file.read()
 
         if not contents.strip():
-            raise ValueError("El archivo está vacío.")
+            raise ValueError("El archivo estÃ¡ vacÃ­o.")
 
         df = pd.read_csv(BytesIO(contents))
 
@@ -346,7 +347,7 @@ async def analyze_incidents(
 
 
 # ============================================================
-# ROUTERS DE AUTENTICACIÓN
+# ROUTERS DE AUTENTICACIÃ“N
 # ============================================================
 
 app.include_router(auth_router)
@@ -359,3 +360,6 @@ app.include_router(profiles_router)
 # ============================================================
 
 app.include_router(inventory_router)
+
+
+
