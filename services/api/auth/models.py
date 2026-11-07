@@ -14,6 +14,13 @@ class UserPublic(BaseModel):
     created_at: str
 
 
+class UserCreatedResponse(BaseModel):
+    id: int
+    is_active: bool
+    role: str
+    created_at: str
+
+
 class UserListItem(BaseModel):
     id: int
     email: str

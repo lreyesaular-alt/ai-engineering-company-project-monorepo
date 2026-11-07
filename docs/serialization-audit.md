@@ -2,13 +2,13 @@
 
 ## 1. Alcance
 
-Esta auditoría revisa los endpoints de FastAPI en `services/api`, sus esquemas de respuesta y la protección de datos sensibles.
+Esta auditoría revisa los endpoints de FastAPI ubicados en `services/api`, sus esquemas de respuesta y la protección de datos sensibles.
 
-Los objetivos son identificar los endpoints que no utilizan serialización explícita, implementar esquemas Pydantic adecuados y garantizar que las respuestas de la API expongan únicamente los campos necesarios.
+Los objetivos son identificar los endpoints que no utilizan serialización explícita, implementar esquemas Pydantic adecuados y garantizar que las respuestas de la API expongan únicamente los campos necesarios para cada consumidor.
 
 ## 2. Inventario de endpoints
 
-| Endpoint | Método | Propósito | Serialización actual |
+| Endpoint | Método | Propósito | Estado de serialización |
 |---|---|---|---|
 | `/api/health` | GET | Comprobar el estado de la API | Serializado: `HealthResponse` |
 | `/api/incidents/analyze` | POST | Analizar datos de incidentes CSV | Serializado: `IncidentAnalysisResponse` |
@@ -44,6 +44,7 @@ Se utilizan para controlar y validar los datos devueltos por los endpoints:
 
 - `UserPublic`: información pública de un usuario.
 - `UserListItem`: información reducida de un usuario para los listados.
+- `UserCreatedResponse`: esquema disponible para respuestas de creación de usuarios.
 - `ProfilePublic`: información pública de un perfil.
 - `TokenResponse`: respuesta de autenticación con el token de acceso.
 - `MessageResponse`: respuestas que contienen un mensaje.
@@ -55,15 +56,15 @@ Se utilizan para controlar y validar los datos devueltos por los endpoints:
 
 ### Endpoints correctamente serializados
 
-Los endpoints que utilizan `UserPublic` o `ProfilePublic` ya disponen de modelos de respuesta explícitos.
+Los endpoints que utilizan `UserPublic` o `ProfilePublic` disponen de modelos de respuesta explícitos.
 
 También se han incorporado modelos específicos para las respuestas de autenticación, operaciones con mensajes, estado de la API y análisis de incidentes.
 
-### Optimización de endpoints parcialmente serializados
+### Optimización del listado de usuarios
 
-El endpoint `GET /users/` se ha optimizado mediante el esquema `UserListItem`.
+El endpoint `GET /users/` se ha optimizado mediante el esquema específico `UserListItem`.
 
-Anteriormente utilizaba `UserPublic`, que incluía más campos de los necesarios para un listado.
+Anteriormente utilizaba `UserPublic`, que incluía campos adicionales que no son necesarios en una respuesta de listado.
 
 La nueva implementación devuelve únicamente:
 
@@ -72,9 +73,7 @@ La nueva implementación devuelve únicamente:
 - `role`
 - `is_active`
 
-Esto reduce los datos transferidos y evita exponer información innecesaria.
-
-Además, se proyectan explícitamente los campos públicos antes de devolver los resultados.
+Además, proyecta explícitamente esos campos antes de devolver los resultados. De esta forma, se reduce el tamaño de la respuesta y se evita exponer información innecesaria.
 
 ### Endpoints que inicialmente carecían de modelos de respuesta
 
@@ -132,7 +131,7 @@ Las respuestas de los endpoints probados coincidieron con los esquemas definidos
 
 ### Comprobación de sintaxis
 
-Se ejecutó:
+Se ejecutó el comando:
 
 `python -m compileall services/api`
 
@@ -143,9 +142,11 @@ Resultado: compilación completada sin errores de sintaxis.
 - Inventario de endpoints completado.
 - Auditoría de serialización completada.
 - Esquemas Pydantic de entrada y salida definidos.
-- Modelos de respuesta explícitos implementados.
+- Modelos de respuesta explícitos implementados en los endpoints inventariados.
 - Protección de campos sensibles aplicada mediante esquemas públicos.
 - Listado de usuarios optimizado mediante `UserListItem`.
 - Tres endpoints verificados manualmente mediante Swagger UI.
 - Compilación del backend completada correctamente.
 - Pruebas automatizadas no disponibles porque el directorio de tests está vacío.
+
+

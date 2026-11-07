@@ -1,9 +1,11 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status
+﻿
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from .dependencies import get_current_user
 from .models import (
     UserCreate,
     UserPublic,
+    UserCreatedResponse,
     ForgotPasswordRequest,
     ResetPasswordRequest,
     ChangePasswordRequest,
@@ -27,7 +29,7 @@ from .users import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=UserPublic, status_code=201)
+@router.post("/register", response_model=UserCreatedResponse, status_code=201)
 def register(user: UserCreate):
     existing = get_user_by_email(user.email)
 
@@ -165,3 +167,5 @@ def change_password(
     return {
         "message": "Contraseña cambiada correctamente"
     }
+
+       
