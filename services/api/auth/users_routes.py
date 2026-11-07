@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+﻿from fastapi import APIRouter, Depends, HTTPException, status
 
 from .dependencies import get_current_user
-from .models import UserPublic, UserUpdate
+from .models import UserPublic, UserUpdate, MessageResponse
 from .db import get_db
 from .users import delete_user, update_user
 
@@ -17,9 +17,16 @@ def get_my_user(current_user=Depends(get_current_user)):
 @router.get("/", response_model=list[UserPublic])
 def get_users(current_user=Depends(get_current_user)):
     db = get_db()
-    users = db.all()
-    db.close()
-    return users
+    try:
+        users = db.all()
+        public_fields = ("id", "email", "is_active", "role", "created_at")
+
+        return [
+            {field: user[field] for field in public_fields if field in user}
+            for user in users
+        ]
+    finally:
+        db.close()
 
 
 @router.put("/{user_id}", response_model=UserPublic)
@@ -57,7 +64,7 @@ def update_user_route(
     return updated
 
 
-@router.delete("/{user_id}")
+@router.delete("/{user_id}", response_model=MessageResponse)
 def delete_user_route(
     user_id: int,
     current_user=Depends(get_current_user),

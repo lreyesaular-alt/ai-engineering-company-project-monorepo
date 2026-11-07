@@ -1,5 +1,4 @@
-﻿
-from fastapi import APIRouter, Depends, HTTPException, status
+﻿from fastapi import APIRouter, Depends, HTTPException, status
 
 from .dependencies import get_current_user
 from .models import (
@@ -8,6 +7,8 @@ from .models import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
     ChangePasswordRequest,
+    TokenResponse,
+    MessageResponse,
 )
 from .security import create_access_token, verify_password
 from .password_reset import (
@@ -44,7 +45,7 @@ def register(user: UserCreate):
     return created
 
 
-@router.post("/login")
+@router.post("/login", response_model=TokenResponse)
 def login(user: UserCreate):
     existing = get_user_by_email(user.email)
 
@@ -76,7 +77,7 @@ def get_me(current_user=Depends(get_current_user)):
     return current_user
 
 
-@router.post("/forgot-password")
+@router.post("/forgot-password", response_model=MessageResponse)
 def forgot_password(request: ForgotPasswordRequest):
     user = get_user_by_email(request.email)
 
@@ -102,7 +103,7 @@ def forgot_password(request: ForgotPasswordRequest):
     }
 
 
-@router.post("/reset-password")
+@router.post("/reset-password", response_model=MessageResponse)
 def reset_password(request: ResetPasswordRequest):
     user_id = consume_password_reset_token(request.token)
 
@@ -136,7 +137,7 @@ def reset_password(request: ResetPasswordRequest):
     }
 
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=MessageResponse)
 def change_password(
     request: ChangePasswordRequest,
     current_user=Depends(get_current_user),

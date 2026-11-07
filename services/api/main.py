@@ -1,9 +1,35 @@
-﻿
-from io import BytesIO
+﻿from io import BytesIO
+from typing import Optional
 
 import pandas as pd
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str
+
+
+class InvalidBreakdown(BaseModel):
+    invalid_location: int
+    invalid_category: int
+    invalid_description: int
+    invalid_reporter: int
+    missing_closed_score: int
+    invalid_score: int
+
+
+class IncidentAnalysisResponse(BaseModel):
+    total_records: int
+    valid_records: int
+    invalid_records: int
+    invalid_breakdown: InvalidBreakdown
+    by_category: dict[str, int]
+    by_status: dict[str, int]
+    closed_incidents: int
+    average_satisfaction: Optional[float] = None
 
 
 app = FastAPI(
@@ -48,7 +74,7 @@ VALID_STATUSES = {
 }
 
 
-@app.get("/api/health")
+@app.get("/api/health", response_model=HealthResponse)
 def health_check():
     return {
         "status": "ok",
@@ -56,7 +82,10 @@ def health_check():
     }
 
 
-@app.post("/api/incidents/analyze")
+@app.post(
+    "/api/incidents/analyze",
+    response_model=IncidentAnalysisResponse,
+)
 async def analyze_incidents(file: UploadFile = File(...)):
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(
