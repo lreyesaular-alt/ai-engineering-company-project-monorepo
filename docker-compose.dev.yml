@@ -1,0 +1,54 @@
+﻿services:
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    container_name: brasaland-api-dev
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./services/api/.env
+    volumes:
+      - ./services/api:/app
+    restart: unless-stopped
+
+  website:
+    image: node:20-alpine
+    container_name: brasaland-website-dev
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      API_URL: http://api:8000
+    volumes:
+      - ./uis/website:/app
+      - website_node_modules:/app/node_modules
+    depends_on:
+      - api
+
+  backoffice:
+    image: node:20-alpine
+    container_name: brasaland-backoffice-dev
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --port 3001"
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      API_URL: http://api:8000
+    volumes:
+      - ./uis/backoffice:/app
+      - backoffice_node_modules:/app/node_modules
+    depends_on:
+      - api
+
+volumes:
+  website_node_modules:
+  backoffice_node_modules:
