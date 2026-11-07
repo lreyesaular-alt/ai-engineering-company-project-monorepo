@@ -1,7 +1,7 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from .dependencies import get_current_user
-from .models import UserCreate, UserPublic
+from .models import UserCreate, UserPublic, UserCreatedResponse, TokenResponse
 from .security import create_access_token, verify_password
 from .users import create_user, get_user_by_email
 
@@ -9,7 +9,7 @@ from .users import create_user, get_user_by_email
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=UserPublic, status_code=201)
+@router.post("/register", response_model=UserCreatedResponse, status_code=201)
 def register(user: UserCreate):
     existing = get_user_by_email(user.email)
 
@@ -27,7 +27,7 @@ def register(user: UserCreate):
     return created
 
 
-@router.post("/login")
+@router.post("/login", response_model=TokenResponse)
 def login(user: UserCreate):
     existing = get_user_by_email(user.email)
 
@@ -57,3 +57,5 @@ def login(user: UserCreate):
 @router.get("/me", response_model=UserPublic)
 def get_me(current_user=Depends(get_current_user)):
     return current_user
+
+
