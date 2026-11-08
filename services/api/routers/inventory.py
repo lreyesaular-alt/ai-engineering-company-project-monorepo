@@ -1,3 +1,6 @@
+
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlmodel import Session, select
@@ -21,22 +24,64 @@ router = APIRouter(
 )
 
 
+# ============================================================
+# INVENTORY PRODUCTS CACHE
+# ============================================================
+
+PRODUCTS_CACHE_TTL = 60
+
+products_cache = {
+    "data": None,
+    "expires_at": 0,
+}
+
+
+def invalidate_products_cache():
+    """
+    Invalidate the products cache after inventory changes.
+    """
+    products_cache["data"] = None
+    products_cache["expires_at"] = 0
+
+    print("Inventory products cache invalidated.")
+
+
+# ============================================================
+# STOCK CALCULATION
+# ============================================================
+
 def calculate_stock(
     ingredient_id: int,
     db: Session,
 ) -> float:
     inbound = db.exec(
-        select(func.coalesce(func.sum(IngredientEntry.quantity), 0.0))
-        .where(IngredientEntry.ingredient_id == ingredient_id)
+        select(
+            func.coalesce(
+                func.sum(IngredientEntry.quantity),
+                0.0,
+            )
+        ).where(
+            IngredientEntry.ingredient_id == ingredient_id
+        )
     ).one()
 
     outbound = db.exec(
-        select(func.coalesce(func.sum(IngredientExit.quantity), 0.0))
-        .where(IngredientExit.ingredient_id == ingredient_id)
+        select(
+            func.coalesce(
+                func.sum(IngredientExit.quantity),
+                0.0,
+            )
+        ).where(
+            IngredientExit.ingredient_id == ingredient_id
+        )
     ).one()
 
     return float(inbound) - float(outbound)
 
+
+# ============================================================
+# GET ALL PRODUCTS
+# ============================================================
 
 @router.get(
     "/products",
@@ -45,11 +90,23 @@ def calculate_stock(
 def get_products(
     db: Session = Depends(get_db),
 ):
+    now = time.monotonic()
+
+    # Return cached products if the cache is valid.
+    if (
+        products_cache["data"] is not None
+        and now < products_cache["expires_at"]
+    ):
+        print("Inventory products cache HIT")
+        return products_cache["data"]
+
+    print("Inventory products cache MISS")
+
     ingredients = db.exec(
         select(Ingredient)
     ).all()
 
-    return [
+    products = [
         IngredientResponse(
             id=ingredient.id,
             name=ingredient.name,
@@ -65,6 +122,18 @@ def get_products(
         for ingredient in ingredients
     ]
 
+    # Store products in cache for 60 seconds.
+    products_cache["data"] = products
+    products_cache["expires_at"] = (
+        time.monotonic() + PRODUCTS_CACHE_TTL
+    )
+
+    return products
+
+
+# ============================================================
+# CREATE PRODUCT
+# ============================================================
 
 @router.post(
     "/products",
@@ -84,7 +153,10 @@ def create_product(
     if existing:
         raise HTTPException(
             status_code=400,
-            detail=f"Ingredient with SKU '{ingredient_data.sku}' already exists.",
+            detail=(
+                f"Ingredient with SKU "
+                f"'{ingredient_data.sku}' already exists."
+            ),
         )
 
     ingredient = Ingredient(
@@ -99,6 +171,9 @@ def create_product(
     db.commit()
     db.refresh(ingredient)
 
+    # Invalidate cache after successful creation.
+    invalidate_products_cache()
+
     return IngredientResponse(
         id=ingredient.id,
         name=ingredient.name,
@@ -109,6 +184,10 @@ def create_product(
         current_stock=0.0,
     )
 
+
+# ============================================================
+# GET SINGLE PRODUCT
+# ============================================================
 
 @router.get(
     "/products/{id}",
@@ -143,6 +222,10 @@ def get_product(
     )
 
 
+# ============================================================
+# CREATE INBOUND ORDER
+# ============================================================
+
 @router.post(
     "/orders/inbound",
     response_model=IngredientEntryResponse,
@@ -175,8 +258,15 @@ def create_inbound_order(
     db.commit()
     db.refresh(entry)
 
+    # Invalidate cache after successful stock entry.
+    invalidate_products_cache()
+
     return entry
 
+
+# ============================================================
+# CREATE OUTBOUND ORDER
+# ============================================================
 
 @router.post(
     "/orders/outbound",
@@ -232,8 +322,15 @@ def create_outbound_order(
     db.commit()
     db.refresh(exit_record)
 
+    # Invalidate cache after successful stock exit.
+    invalidate_products_cache()
+
     return exit_record
 
+
+# ============================================================
+# GET ALL ORDERS
+# ============================================================
 
 @router.get(
     "/orders",
@@ -246,8 +343,7 @@ def get_orders(
         select(
             IngredientEntry,
             Ingredient,
-        )
-        .join(
+        ).join(
             Ingredient,
             Ingredient.id == IngredientEntry.ingredient_id,
         )
@@ -257,8 +353,7 @@ def get_orders(
         select(
             IngredientExit,
             Ingredient,
-        )
-        .join(
+        ).join(
             Ingredient,
             Ingredient.id == IngredientExit.ingredient_id,
         )

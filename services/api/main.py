@@ -1,10 +1,10 @@
 ﻿
+import time
 from io import BytesIO
 
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func
 from sqlmodel import Session, select
 
 from services.api.auth.profiles_routes import router as profiles_router
@@ -12,7 +12,11 @@ from services.api.auth.routes import router as auth_router
 from services.api.auth.users_routes import router as users_router
 from services.api.database import engine
 from services.api.models import Incident
-from services.api.response_schemas import HealthResponse, IncidentSummaryResponse, IncidentAnalysisResponse
+from services.api.response_schemas import (
+    HealthResponse,
+    IncidentSummaryResponse,
+    IncidentAnalysisResponse,
+)
 from services.api.routers.inventory import router as inventory_router
 
 
@@ -32,11 +36,38 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://192.168.0.185:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ============================================================
+# PERFORMANCE MONITORING MIDDLEWARE
+# ============================================================
+
+@app.middleware("http")
+async def measure_request_time(request: Request, call_next):
+    start_time = time.perf_counter()
+
+    response = await call_next(request)
+
+    elapsed_time = (
+        time.perf_counter() - start_time
+    ) * 1000
+
+    response.headers["X-Process-Time"] = (
+        f"{elapsed_time:.2f}ms"
+    )
+
+    print(
+        f"{request.method} {request.url.path} "
+        f"completed in {elapsed_time:.2f}ms"
+    )
+
+    return response
 
 
 # ============================================================
@@ -60,7 +91,6 @@ VALID_LOCATIONS = {
     "FLA-04",
 }
 
-
 VALID_CATEGORIES = {
     "CUSTOMER_COMPLAINT",
     "EQUIPMENT",
@@ -69,13 +99,11 @@ VALID_CATEGORIES = {
     "STAFF",
 }
 
-
 VALID_STATUSES = {
     "OPEN",
     "CLOSED",
     "DISCARDED",
 }
-
 
 REQUIRED_COLUMNS = {
     "location_id",
@@ -88,10 +116,38 @@ REQUIRED_COLUMNS = {
 
 
 # ============================================================
+# INCIDENTS SUMMARY CACHE
+# ============================================================
+
+SUMMARY_CACHE_TTL = 60
+
+summary_cache = {
+    "data": None,
+    "expires_at": 0,
+}
+
+
+def invalidate_summary_cache():
+    """
+    Invalidate the incidents summary cache.
+
+    Call this function whenever an incident is created,
+    updated or deleted.
+    """
+    summary_cache["data"] = None
+    summary_cache["expires_at"] = 0
+
+    print("Incidents summary cache invalidated.")
+
+
+# ============================================================
 # HEALTH CHECK
 # ============================================================
 
-@app.get("/api/health", response_model=HealthResponse)
+@app.get(
+    "/api/health",
+    response_model=HealthResponse,
+)
 def health_check():
     return {
         "status": "ok",
@@ -100,15 +156,50 @@ def health_check():
 
 
 # ============================================================
+# INCIDENTS LIST
+# ============================================================
+
+@app.get("/api/incidents")
+def get_incidents():
+    """
+    Return all incidents for the incidents list page.
+    """
+    with Session(engine) as db:
+        incidents = db.exec(
+            select(Incident).order_by(Incident.id)
+        ).all()
+
+        return incidents
+
+
+# ============================================================
 # INCIDENTS SUMMARY
 # ============================================================
 
-@app.get("/api/incidents/summary", response_model=IncidentSummaryResponse)
+@app.get(
+    "/api/incidents/summary",
+    response_model=IncidentSummaryResponse,
+)
 def incidents_summary():
     """
-    Devuelve el resumen de incidentes utilizado por el dashboard.
+    Returns the incidents summary using an in-memory cache.
+
+    Cache TTL: 60 seconds.
     """
 
+    now = time.monotonic()
+
+    # Check whether cached data is still valid.
+    if (
+        summary_cache["data"] is not None
+        and now < summary_cache["expires_at"]
+    ):
+        print("Incidents summary cache HIT")
+        return summary_cache["data"]
+
+    print("Incidents summary cache MISS")
+
+    # Retrieve incidents from the database.
     with Session(engine) as db:
         incidents = db.exec(
             select(Incident)
@@ -117,35 +208,24 @@ def incidents_summary():
     total_records = len(incidents)
 
     by_category = {}
-
-    for incident in incidents:
-        category = incident.category
-
-        if category not in by_category:
-            by_category[category] = 0
-
-        by_category[category] += 1
-
     by_status = {}
 
     for incident in incidents:
-        status = incident.status
+        by_category[incident.category] = (
+            by_category.get(incident.category, 0) + 1
+        )
 
-        if status not in by_status:
-            by_status[status] = 0
-
-        by_status[status] += 1
-
-    closed_incidents = [
-        incident
-        for incident in incidents
-        if incident.status == "CLOSED"
-    ]
+        by_status[incident.status] = (
+            by_status.get(incident.status, 0) + 1
+        )
 
     closed_scores = [
         incident.satisfaction_score
-        for incident in closed_incidents
-        if incident.satisfaction_score is not None
+        for incident in incidents
+        if (
+            incident.status == "CLOSED"
+            and incident.satisfaction_score is not None
+        )
     ]
 
     average_satisfaction = (
@@ -157,24 +237,38 @@ def incidents_summary():
         else None
     )
 
-    return {
+    result = {
         "total_records": total_records,
         "by_category": by_category,
         "by_status": by_status,
-        "closed_incidents": len(closed_incidents),
+        "closed_incidents": by_status.get("CLOSED", 0),
         "average_satisfaction": average_satisfaction,
     }
+
+    # Save the result in cache for 60 seconds.
+    summary_cache["data"] = result
+    summary_cache["expires_at"] = (
+        time.monotonic() + SUMMARY_CACHE_TTL
+    )
+
+    return result
 
 
 # ============================================================
 # INCIDENTS ANALYSIS
 # ============================================================
 
-@app.post("/api/incidents/analyze", response_model=IncidentAnalysisResponse)
+@app.post(
+    "/api/incidents/analyze",
+    response_model=IncidentAnalysisResponse,
+)
 async def analyze_incidents(
     file: UploadFile = File(...),
 ):
-    if not file.filename or not file.filename.lower().endswith(".csv"):
+    if (
+        not file.filename
+        or not file.filename.lower().endswith(".csv")
+    ):
         raise HTTPException(
             status_code=400,
             detail="El archivo debe ser un CSV.",
@@ -184,7 +278,7 @@ async def analyze_incidents(
         contents = await file.read()
 
         if not contents.strip():
-            raise ValueError("El archivo estÃ¡ vacÃ­o.")
+            raise ValueError("El archivo está vacío.")
 
         df = pd.read_csv(BytesIO(contents))
 
@@ -298,16 +392,14 @@ async def analyze_incidents(
             float(closed_scores.mean()),
             2,
         )
-        if not closed_scores.empty
+        if not closed_df.empty
         else None
     )
 
     return {
         "total_records": len(df),
         "valid_records": len(valid_df),
-        "invalid_records": int(
-            invalid_any.sum()
-        ),
+        "invalid_records": int(invalid_any.sum()),
         "invalid_breakdown": {
             "invalid_location": int(
                 invalid_location.sum()
@@ -347,7 +439,7 @@ async def analyze_incidents(
 
 
 # ============================================================
-# ROUTERS DE AUTENTICACIÃ“N
+# ROUTERS DE AUTENTICACIÓN
 # ============================================================
 
 app.include_router(auth_router)
@@ -360,6 +452,3 @@ app.include_router(profiles_router)
 # ============================================================
 
 app.include_router(inventory_router)
-
-
-
