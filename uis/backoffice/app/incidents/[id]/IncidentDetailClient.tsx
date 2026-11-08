@@ -2,8 +2,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { api } from "../../../lib/api";
+
+const IncidentStatusControls = dynamic(
+  () => import("../../../components/IncidentStatusControls"),
+  {
+    loading: () => (
+      <p className="mt-6 text-sm text-zinc-500">
+        Cargando controles...
+      </p>
+    ),
+  }
+);
 
 type Incident = {
   id: number;
@@ -248,9 +260,7 @@ export default function IncidentDetailClient({
               </h1>
             </div>
 
-            <span
-              className={getStatusClasses(incident.status)}
-            >
+            <span className={getStatusClasses(incident.status)}>
               {getStatusLabel(incident.status)}
             </span>
           </div>
@@ -260,7 +270,6 @@ export default function IncidentDetailClient({
               <p className="text-xs font-medium uppercase text-zinc-400">
                 Ubicación
               </p>
-
               <p className="mt-1 text-zinc-800">
                 {incident.location_id}
               </p>
@@ -270,7 +279,6 @@ export default function IncidentDetailClient({
               <p className="text-xs font-medium uppercase text-zinc-400">
                 Reportado por
               </p>
-
               <p className="mt-1 text-zinc-800">
                 {incident.reporter_id}
               </p>
@@ -280,7 +288,6 @@ export default function IncidentDetailClient({
               <p className="text-xs font-medium uppercase text-zinc-400">
                 Fecha
               </p>
-
               <p className="mt-1 text-zinc-800">
                 {formatDate(incident.created_at)}
               </p>
@@ -290,7 +297,6 @@ export default function IncidentDetailClient({
               <p className="text-xs font-medium uppercase text-zinc-400">
                 Satisfacción
               </p>
-
               <p className="mt-1 text-zinc-800">
                 {incident.satisfaction_score ?? "-"}
               </p>
@@ -301,7 +307,6 @@ export default function IncidentDetailClient({
             <p className="text-xs font-medium uppercase text-zinc-400">
               Descripción
             </p>
-
             <p className="mt-2 whitespace-pre-wrap text-zinc-700">
               {incident.description}
             </p>
@@ -312,7 +317,6 @@ export default function IncidentDetailClient({
               <p className="text-sm font-medium text-red-800">
                 No se pudo actualizar el incidente.
               </p>
-
               <p className="mt-1 text-sm text-red-700">
                 {error}
               </p>
@@ -325,33 +329,11 @@ export default function IncidentDetailClient({
             </div>
           )}
 
-          <div className="mt-6 border-t pt-6">
-            <p className="mb-3 text-sm font-medium text-zinc-700">
-              Cambiar estado
-            </p>
-
-            <div className="flex flex-wrap gap-3">
-              {["OPEN", "CLOSED", "DISCARDED"].map(
-                (newStatus) => (
-                  <button
-                    type="button"
-                    key={newStatus}
-                    onClick={() => updateStatus(newStatus)}
-                    disabled={
-                      updating ||
-                      incident.status === newStatus
-                    }
-                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {updating &&
-                    incident.status !== newStatus
-                      ? "Actualizando..."
-                      : getStatusLabel(newStatus)}
-                  </button>
-                )
-              )}
-            </div>
-          </div>
+          <IncidentStatusControls
+            status={incident.status}
+            updating={updating}
+            onUpdate={updateStatus}
+          />
         </section>
       </div>
     </main>
