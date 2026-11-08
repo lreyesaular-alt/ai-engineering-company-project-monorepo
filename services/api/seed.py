@@ -1,9 +1,11 @@
+
 from pathlib import Path
 
 import pandas as pd
+from sqlmodel import SQLModel, Session, select
 
-from database import Base, SessionLocal, engine
-from models import Incident
+from database import engine
+from models import Incident, Ingredient, IngredientEntry, IngredientExit
 
 
 VALID_LOCATIONS = {
@@ -38,10 +40,7 @@ def load_valid_incidents() -> pd.DataFrame:
             f"No se encontró el archivo: {file_path}"
         )
 
-    df = pd.read_csv(
-        file_path,
-        encoding="utf-8",
-    )
+    df = pd.read_csv(file_path, encoding="utf-8")
 
     invalid_location = (
         df["location_id"].isna()
@@ -108,14 +107,17 @@ def load_valid_incidents() -> pd.DataFrame:
 
 
 def seed_database() -> None:
-    """Create the database and load valid incidents."""
+    """Create missing tables and load valid incidents."""
 
-    Base.metadata.create_all(bind=engine)
+    # Create the tables registered in SQLModel metadata.
+    SQLModel.metadata.create_all(engine)
 
-    db = SessionLocal()
+    df = load_valid_incidents()
 
-    try:
-        existing_count = db.query(Incident).count()
+    with Session(engine) as db:
+        existing_count = len(
+            db.exec(select(Incident)).all()
+        )
 
         if existing_count > 0:
             print(
@@ -123,8 +125,6 @@ def seed_database() -> None:
                 f"{existing_count} incidentes."
             )
             return
-
-        df = load_valid_incidents()
 
         incidents = []
 
@@ -149,20 +149,18 @@ def seed_database() -> None:
 
             incidents.append(incident)
 
-        db.add_all(incidents)
-        db.commit()
+        try:
+            db.add_all(incidents)
+            db.commit()
 
-        print(
-            f"Seed completado: "
-            f"{len(incidents)} incidentes cargados."
-        )
+            print(
+                f"Seed completado: "
+                f"{len(incidents)} incidentes cargados."
+            )
 
-    except Exception:
-        db.rollback()
-        raise
-
-    finally:
-        db.close()
+        except Exception:
+            db.rollback()
+            raise
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
-﻿"use client";
+﻿
+"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api } from "../../lib/api";
 
@@ -44,7 +45,6 @@ export default function IncidentsPage() {
       setError("");
 
       const response = await api("/api/incidents");
-
       const data = await response.json();
 
       if (!Array.isArray(data)) {
@@ -60,9 +60,7 @@ export default function IncidentsPage() {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError(
-          "No se pudieron cargar los incidentes."
-        );
+        setError("No se pudieron cargar los incidentes.");
       }
     } finally {
       setLoading(false);
@@ -70,21 +68,64 @@ export default function IncidentsPage() {
   }
 
   useEffect(() => {
-    loadIncidents();
+    let cancelled = false;
+
+    async function fetchIncidents() {
+      try {
+        setError("");
+
+        const response = await api("/api/incidents");
+        const data = await response.json();
+
+        if (!Array.isArray(data)) {
+          throw new Error(
+            "La API no devolvió una lista de incidentes."
+          );
+        }
+
+        if (!cancelled) {
+          setIncidents(data);
+        }
+      } catch (err) {
+        console.error("Error cargando incidentes:", err);
+
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "No se pudieron cargar los incidentes."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchIncidents();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const filteredIncidents = incidents.filter(
-    (incident) => {
-      const matchesCategory =
-        category === "ALL" ||
-        incident.category === category;
+  // useMemo evita recalcular los incidentes filtrados
+  // cuando no cambian los incidentes ni los filtros.
+  const filteredIncidents = useMemo(
+    () =>
+      incidents.filter((incident) => {
+        const matchesCategory =
+          category === "ALL" ||
+          incident.category === category;
 
-      const matchesStatus =
-        status === "ALL" ||
-        incident.status === status;
+        const matchesStatus =
+          status === "ALL" ||
+          incident.status === status;
 
-      return matchesCategory && matchesStatus;
-    }
+        return matchesCategory && matchesStatus;
+      }),
+    [incidents, category, status]
   );
 
   function formatDate(date: string | null) {
@@ -294,27 +335,21 @@ export default function IncidentsPage() {
                       <th className="px-5 py-4 font-semibold text-zinc-700">
                         ID
                       </th>
-
                       <th className="px-5 py-4 font-semibold text-zinc-700">
                         Categoría
                       </th>
-
                       <th className="px-5 py-4 font-semibold text-zinc-700">
                         Descripción
                       </th>
-
                       <th className="px-5 py-4 font-semibold text-zinc-700">
                         Ubicación
                       </th>
-
                       <th className="px-5 py-4 font-semibold text-zinc-700">
                         Estado
                       </th>
-
                       <th className="px-5 py-4 font-semibold text-zinc-700">
                         Fecha
                       </th>
-
                       <th className="px-5 py-4 font-semibold text-zinc-700">
                         Acción
                       </th>
@@ -332,9 +367,7 @@ export default function IncidentsPage() {
                         </td>
 
                         <td className="px-5 py-4 text-zinc-700">
-                          {getCategoryLabel(
-                            incident.category
-                          )}
+                          {getCategoryLabel(incident.category)}
                         </td>
 
                         <td className="max-w-md px-5 py-4 text-zinc-700">
@@ -353,16 +386,12 @@ export default function IncidentsPage() {
                               incident.status
                             )}`}
                           >
-                            {getStatusLabel(
-                              incident.status
-                            )}
+                            {getStatusLabel(incident.status)}
                           </span>
                         </td>
 
                         <td className="whitespace-nowrap px-5 py-4 text-zinc-600">
-                          {formatDate(
-                            incident.created_at
-                          )}
+                          {formatDate(incident.created_at)}
                         </td>
 
                         <td className="px-5 py-4">
