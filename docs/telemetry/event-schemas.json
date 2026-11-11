@@ -1,0 +1,962 @@
+{
+    "schemaVersion":  "1.0.0",
+    "description":  "Catálogo de esquemas de telemetría para Brasaland.",
+    "commonEnvelope":  {
+                           "eventId":  {
+                                           "type":  "string",
+                                           "required":  true,
+                                           "description":  "Identificador único del evento."
+                                       },
+                           "timestamp":  {
+                                             "type":  "string",
+                                             "format":  "date-time",
+                                             "required":  true,
+                                             "description":  "Fecha y hora del evento en formato ISO 8601."
+                                         },
+                           "sessionId":  {
+                                             "type":  [
+                                                          "string",
+                                                          "null"
+                                                      ],
+                                             "required":  true,
+                                             "description":  "Identificador de sesión, sin incluir credenciales."
+                                         },
+                           "userId":  {
+                                          "type":  [
+                                                       "string",
+                                                       "null"
+                                                   ],
+                                          "required":  true,
+                                          "description":  "Identificador técnico seudonimizado del usuario."
+                                      },
+                           "event_type":  {
+                                              "type":  "string",
+                                              "required":  true,
+                                              "description":  "Nombre del evento registrado."
+                                          },
+                           "schemaVersion":  {
+                                                 "type":  "string",
+                                                 "required":  true,
+                                                 "description":  "Versión del esquema utilizado."
+                                             },
+                           "requestId":  {
+                                             "type":  [
+                                                          "string",
+                                                          "null"
+                                                      ],
+                                             "required":  true,
+                                             "description":  "Identificador de correlación de la petición."
+                                         },
+                           "properties":  {
+                                              "type":  "object",
+                                              "required":  true,
+                                              "description":  "Propiedades específicas permitidas para cada evento."
+                                          }
+                       },
+    "privacy":  {
+                    "additionalProperties":  false,
+                    "rules":  [
+                                  "Solo se permiten las propiedades declaradas para cada evento.",
+                                  "No registrar nombres de empleados ni datos personales de clientes.",
+                                  "No registrar contraseñas, tokens, cookies ni credenciales.",
+                                  "Seudonimizar los identificadores de usuario.",
+                                  "No realizar conversiones de moneda: utilizar la moneda local de cada ubicación.",
+                                  "No modificar el stock directamente; los movimientos deben ser trazables mediante órdenes de entrada y salida.",
+                                  "Los errores y las peticiones deben excluir datos sensibles de sus mensajes y metadatos."
+                              ],
+                    "countryValues":  [
+                                          "CO",
+                                          "US"
+                                      ],
+                    "currencyValues":  [
+                                           "COP",
+                                           "USD"
+                                       ],
+                    "wasteReasonValues":  [
+                                              "expired",
+                                              "kitchen_error",
+                                              "theft_suspected"
+                                          ]
+                },
+    "events":  [
+                   {
+                       "event_type":  "inbound_order_created",
+                       "category":  "business_inventory",
+                       "classification":  "mandatory",
+                       "trigger":  "Se crea una orden de entrada de inventario.",
+                       "hypothesis":  "Registrar las entradas permite conocer el abastecimiento recibido por ubicación y producto.",
+                       "decision":  "Analizar recepción, abastecimiento y trazabilidad de inventario.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "La creación de una orden debe quedar registrada inmediatamente.",
+                       "properties":  {
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "country":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "enum":  [
+                                                                       "CO",
+                                                                       "US"
+                                                                   ],
+                                                          "description":  "País de la ubicación."
+                                                      },
+                                          "product_id":  {
+                                                             "type":  "string",
+                                                             "required":  true,
+                                                             "description":  "Identificador del producto."
+                                                         },
+                                          "product_category":  {
+                                                                   "type":  "string",
+                                                                   "required":  true,
+                                                                   "description":  "Categoría del producto."
+                                                               },
+                                          "quantity":  {
+                                                           "type":  "number",
+                                                           "required":  true,
+                                                           "minimum":  0,
+                                                           "description":  "Cantidad recibida."
+                                                       },
+                                          "unit":  {
+                                                       "type":  "string",
+                                                       "required":  true,
+                                                       "description":  "Unidad de medida."
+                                                   },
+                                          "currency":  {
+                                                           "type":  "string",
+                                                           "required":  true,
+                                                           "enum":  [
+                                                                        "COP",
+                                                                        "USD"
+                                                                    ],
+                                                           "description":  "Moneda local de la ubicación."
+                                                       },
+                                          "supplier_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador técnico del proveedor, propuesto."
+                                                          },
+                                          "order_id":  {
+                                                           "type":  "string",
+                                                           "required":  true,
+                                                           "description":  "Identificador de la orden, propuesto."
+                                                       }
+                                      }
+                   },
+                   {
+                       "event_type":  "outbound_order_created",
+                       "category":  "business_inventory",
+                       "classification":  "mandatory",
+                       "trigger":  "Se crea una orden de salida de inventario.",
+                       "hypothesis":  "Las salidas permiten analizar el consumo y los movimientos de inventario.",
+                       "decision":  "Analizar consumo por producto y ubicación, y mantener trazabilidad de las salidas.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "La creación de una orden debe quedar registrada inmediatamente.",
+                       "properties":  {
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "country":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "enum":  [
+                                                                       "CO",
+                                                                       "US"
+                                                                   ],
+                                                          "description":  "País de la ubicación."
+                                                      },
+                                          "product_id":  {
+                                                             "type":  "string",
+                                                             "required":  true,
+                                                             "description":  "Identificador del producto."
+                                                         },
+                                          "product_category":  {
+                                                                   "type":  "string",
+                                                                   "required":  true,
+                                                                   "description":  "Categoría del producto."
+                                                               },
+                                          "quantity":  {
+                                                           "type":  "number",
+                                                           "required":  true,
+                                                           "minimum":  0,
+                                                           "description":  "Cantidad de salida."
+                                                       },
+                                          "unit":  {
+                                                       "type":  "string",
+                                                       "required":  true,
+                                                       "description":  "Unidad de medida."
+                                                   },
+                                          "currency":  {
+                                                           "type":  "string",
+                                                           "required":  true,
+                                                           "enum":  [
+                                                                        "COP",
+                                                                        "USD"
+                                                                    ],
+                                                           "description":  "Moneda local de la ubicación."
+                                                       },
+                                          "reason":  {
+                                                         "type":  "string",
+                                                         "required":  false,
+                                                         "enum":  [
+                                                                      "expired",
+                                                                      "kitchen_error",
+                                                                      "theft_suspected"
+                                                                  ],
+                                                         "description":  "Motivo cuando la salida corresponde a desperdicio."
+                                                     },
+                                          "order_id":  {
+                                                           "type":  "string",
+                                                           "required":  true,
+                                                           "description":  "Identificador de la orden, propuesto."
+                                                       }
+                                      },
+                       "conditionalRules":  [
+                                                "Cuando la salida corresponda a desperdicio, reason es obligatorio y debe ser expired, kitchen_error o theft_suspected."
+                                            ]
+                   },
+                   {
+                       "event_type":  "stock_waste_registered",
+                       "category":  "business_inventory",
+                       "classification":  "mandatory",
+                       "trigger":  "Se registra un desperdicio de stock.",
+                       "hypothesis":  "Clasificar los desperdicios permite identificar sus causas y patrones.",
+                       "decision":  "Priorizar acciones para reducir pérdidas por vencimiento, errores de cocina o sospecha de robo.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "El desperdicio debe quedar registrado en el momento en que ocurre.",
+                       "properties":  {
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "country":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "enum":  [
+                                                                       "CO",
+                                                                       "US"
+                                                                   ],
+                                                          "description":  "País de la ubicación."
+                                                      },
+                                          "product_id":  {
+                                                             "type":  "string",
+                                                             "required":  true,
+                                                             "description":  "Identificador del producto."
+                                                         },
+                                          "product_category":  {
+                                                                   "type":  "string",
+                                                                   "required":  true,
+                                                                   "description":  "Categoría del producto."
+                                                               },
+                                          "quantity":  {
+                                                           "type":  "number",
+                                                           "required":  true,
+                                                           "minimum":  0,
+                                                           "description":  "Cantidad desperdiciada."
+                                                       },
+                                          "unit":  {
+                                                       "type":  "string",
+                                                       "required":  true,
+                                                       "description":  "Unidad de medida."
+                                                   },
+                                          "reason":  {
+                                                         "type":  "string",
+                                                         "required":  true,
+                                                         "enum":  [
+                                                                      "expired",
+                                                                      "kitchen_error",
+                                                                      "theft_suspected"
+                                                                  ],
+                                                         "description":  "Motivo del desperdicio."
+                                                     },
+                                          "currency":  {
+                                                           "type":  "string",
+                                                           "required":  true,
+                                                           "description":  "Moneda local de la ubicación.",
+                                                           "enum":  [
+                                                                        "COP",
+                                                                        "USD"
+                                                                    ]
+                                                       },
+                                          "order_id":  {
+                                                           "type":  "string",
+                                                           "required":  true,
+                                                           "description":  "Identificador de la orden de salida asociada."
+                                                       }
+                                      }
+                   },
+                   {
+                       "event_type":  "stock_threshold_triggered",
+                       "category":  "business_inventory",
+                       "classification":  "mandatory",
+                       "trigger":  "El stock de un producto alcanza o cruza el umbral configurado.",
+                       "hypothesis":  "Los umbrales permiten anticipar posibles faltantes de inventario.",
+                       "decision":  "Revisar la necesidad de reposición por ubicación y producto.",
+                       "delivery":  "stream",
+                       "delivery_justification":  "La alerta debe llegar cuando se detecta el umbral.",
+                       "properties":  {
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "country":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "enum":  [
+                                                                       "CO",
+                                                                       "US"
+                                                                   ],
+                                                          "description":  "País de la ubicación."
+                                                      },
+                                          "product_id":  {
+                                                             "type":  "string",
+                                                             "required":  true,
+                                                             "description":  "Identificador del producto."
+                                                         },
+                                          "product_category":  {
+                                                                   "type":  "string",
+                                                                   "required":  true,
+                                                                   "description":  "Categoría del producto."
+                                                               },
+                                          "quantity":  {
+                                                           "type":  "number",
+                                                           "required":  true,
+                                                           "description":  "Stock disponible al dispararse el umbral."
+                                                       },
+                                          "unit":  {
+                                                       "type":  "string",
+                                                       "required":  true,
+                                                       "description":  "Unidad de medida."
+                                                   },
+                                          "threshold_quantity":  {
+                                                                     "type":  "number",
+                                                                     "required":  true,
+                                                                     "description":  "Cantidad configurada como umbral, propuesta."
+                                                                 }
+                                      }
+                   },
+                   {
+                       "event_type":  "direct_stock_edit_rejected",
+                       "category":  "business_inventory",
+                       "classification":  "mandatory",
+                       "trigger":  "El sistema rechaza un intento de modificar el stock directamente.",
+                       "hypothesis":  "Los intentos rechazados permiten detectar operaciones que eluden la trazabilidad de órdenes.",
+                       "decision":  "Reforzar controles y revisar los flujos de modificación de inventario.",
+                       "delivery":  "stream",
+                       "delivery_justification":  "El rechazo es un evento de control que requiere registro inmediato.",
+                       "properties":  {
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "country":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "enum":  [
+                                                                       "CO",
+                                                                       "US"
+                                                                   ],
+                                                          "description":  "País de la ubicación."
+                                                      },
+                                          "product_id":  {
+                                                             "type":  "string",
+                                                             "required":  true,
+                                                             "description":  "Identificador del producto."
+                                                         },
+                                          "product_category":  {
+                                                                   "type":  "string",
+                                                                   "required":  true,
+                                                                   "description":  "Categoría del producto."
+                                                               },
+                                          "operation_type":  {
+                                                                 "type":  "string",
+                                                                 "required":  true,
+                                                                 "description":  "Tipo de operación intentada, propuesto."
+                                                             },
+                                          "rejection_result":  {
+                                                                   "type":  "string",
+                                                                   "required":  true,
+                                                                   "description":  "Resultado del intento de modificación.",
+                                                                   "enum":  [
+                                                                                "rejected"
+                                                                            ]
+                                                               }
+                                      }
+                   },
+                   {
+                       "event_type":  "ingredient_price_variance_detected",
+                       "category":  "business_inventory",
+                       "classification":  "mandatory",
+                       "trigger":  "Se detecta una variación en el precio de un ingrediente.",
+                       "hypothesis":  "Las variaciones de precio pueden afectar los costes y márgenes operativos.",
+                       "decision":  "Investigar variaciones relevantes y revisar decisiones de compra.",
+                       "delivery":  "stream",
+                       "delivery_justification":  "La detección debe estar disponible para su revisión sin demora.",
+                       "properties":  {
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "country":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "enum":  [
+                                                                       "CO",
+                                                                       "US"
+                                                                   ],
+                                                          "description":  "País de la ubicación."
+                                                      },
+                                          "product_id":  {
+                                                             "type":  "string",
+                                                             "required":  true,
+                                                             "description":  "Identificador del ingrediente."
+                                                         },
+                                          "product_category":  {
+                                                                   "type":  "string",
+                                                                   "required":  true,
+                                                                   "description":  "Categoría del ingrediente."
+                                                               },
+                                          "currency":  {
+                                                           "type":  "string",
+                                                           "required":  true,
+                                                           "enum":  [
+                                                                        "COP",
+                                                                        "USD"
+                                                                    ],
+                                                           "description":  "Moneda local de la ubicación."
+                                                       },
+                                          "previous_price":  {
+                                                                 "type":  "number",
+                                                                 "required":  true,
+                                                                 "minimum":  0,
+                                                                 "description":  "Precio anterior, propuesto."
+                                                             },
+                                          "new_price":  {
+                                                            "type":  "number",
+                                                            "required":  true,
+                                                            "minimum":  0,
+                                                            "description":  "Nuevo precio, propuesto."
+                                                        },
+                                          "variance_percentage":  {
+                                                                      "type":  "number",
+                                                                      "required":  true,
+                                                                      "description":  "Porcentaje de variación, propuesto."
+                                                                  },
+                                          "supplier_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador técnico del proveedor."
+                                                          }
+                                      },
+                       "triggerCondition":  "Variación superior al 10% respecto al precio histórico del mismo producto y proveedor, en moneda local."
+                   },
+                   {
+                       "event_type":  "inbound_order_started",
+                       "category":  "business_flow",
+                       "classification":  "additional",
+                       "trigger":  "Un usuario inicia el flujo de creación de una orden de entrada.",
+                       "hypothesis":  "Medir el inicio permite conocer el volumen de operaciones iniciadas.",
+                       "decision":  "Comparar inicios con órdenes completadas y abandonadas.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "Es un evento analítico de flujo que puede agruparse.",
+                       "properties":  {
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "country":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "enum":  [
+                                                                       "CO",
+                                                                       "US"
+                                                                   ],
+                                                          "description":  "País de la ubicación."
+                                                      },
+                                          "supplier_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador técnico del proveedor."
+                                                          },
+                                          "flow_type":  {
+                                                            "type":  "string",
+                                                            "required":  true,
+                                                            "description":  "Tipo de flujo de entrada."
+                                                        }
+                                      }
+                   },
+                   {
+                       "event_type":  "outbound_order_started",
+                       "category":  "business_flow",
+                       "classification":  "additional",
+                       "trigger":  "Un usuario inicia el flujo de creación de una orden de salida.",
+                       "hypothesis":  "Medir el inicio permite conocer el volumen de operaciones iniciadas.",
+                       "decision":  "Comparar inicios con órdenes completadas y abandonadas.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "Es un evento analítico de flujo que puede agruparse.",
+                       "properties":  {
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "country":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "enum":  [
+                                                                       "CO",
+                                                                       "US"
+                                                                   ],
+                                                          "description":  "País de la ubicación."
+                                                      },
+                                          "output_type":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Tipo de salida."
+                                                          },
+                                          "flow_origin":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Origen del flujo de salida."
+                                                          }
+                                      }
+                   },
+                   {
+                       "event_type":  "order_validation_failed",
+                       "category":  "business_flow",
+                       "classification":  "additional",
+                       "trigger":  "Una orden no supera una validación.",
+                       "hypothesis":  "Los fallos de validación pueden señalar problemas de usabilidad o calidad de datos.",
+                       "decision":  "Priorizar mejoras en validaciones y formularios.",
+                       "delivery":  "stream",
+                       "delivery_justification":  "El fallo puede requerir diagnóstico inmediato.",
+                       "properties":  {
+                                          "order_type":  {
+                                                             "type":  "string",
+                                                             "required":  true,
+                                                             "enum":  [
+                                                                          "inbound",
+                                                                          "outbound"
+                                                                      ],
+                                                             "description":  "Tipo de orden."
+                                                         },
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "validation_rule_id":  {
+                                                                     "type":  "string",
+                                                                     "required":  true,
+                                                                     "description":  "Código técnico de validación."
+                                                                 },
+                                          "country":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "description":  "País de la ubicación.",
+                                                          "enum":  [
+                                                                       "CO",
+                                                                       "US"
+                                                                   ]
+                                                      },
+                                          "error_category":  {
+                                                                 "type":  "string",
+                                                                 "required":  true,
+                                                                 "description":  "Categoría normalizada del error."
+                                                             }
+                                      }
+                   },
+                   {
+                       "event_type":  "order_abandoned",
+                       "category":  "business_flow",
+                       "classification":  "additional",
+                       "trigger":  "Un flujo de orden iniciado termina sin crear la orden.",
+                       "hypothesis":  "Los abandonos pueden revelar fricción en el proceso.",
+                       "decision":  "Investigar pasos con mayor abandono y simplificar el flujo.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "El análisis agregado de abandonos puede procesarse por lotes.",
+                       "properties":  {
+                                          "order_type":  {
+                                                             "type":  "string",
+                                                             "required":  true,
+                                                             "enum":  [
+                                                                          "inbound",
+                                                                          "outbound"
+                                                                      ],
+                                                             "description":  "Tipo de orden."
+                                                         },
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "stage_reached":  {
+                                                                "type":  "string",
+                                                                "required":  false,
+                                                                "description":  "Último paso alcanzado, propuesto."
+                                                            },
+                                          "country":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "description":  "País de la ubicación.",
+                                                          "enum":  [
+                                                                       "CO",
+                                                                       "US"
+                                                                   ]
+                                                      },
+                                          "flow_duration":  {
+                                                                "type":  "number",
+                                                                "required":  true,
+                                                                "description":  "Duración del flujo hasta el abandono, en segundos.",
+                                                                "enum":  [
+
+                                                                         ],
+                                                                "minimum":  0
+                                                            }
+                                      }
+                   },
+                   {
+                       "event_type":  "inventory_search_performed",
+                       "category":  "business_flow",
+                       "classification":  "additional",
+                       "trigger":  "Se realiza una búsqueda en inventario.",
+                       "hypothesis":  "Las búsquedas muestran qué información de inventario necesitan consultar los usuarios.",
+                       "decision":  "Mejorar la búsqueda y la organización de productos.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "Las búsquedas son eventos analíticos de frecuencia relativamente alta.",
+                       "properties":  {
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "result_count":  {
+                                                               "type":  "integer",
+                                                               "required":  true,
+                                                               "minimum":  0,
+                                                               "description":  "Número de resultados."
+                                                           },
+                                          "search_scope":  {
+                                                               "type":  "string",
+                                                               "required":  true,
+                                                               "description":  "Tipo de búsqueda."
+                                                           },
+                                          "country":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "description":  "País de la ubicación.",
+                                                          "enum":  [
+                                                                       "CO",
+                                                                       "US"
+                                                                   ]
+                                                      }
+                                      }
+                   },
+                   {
+                       "event_type":  "login_succeeded",
+                       "category":  "authentication",
+                       "classification":  "additional",
+                       "trigger":  "Un usuario inicia sesión correctamente.",
+                       "hypothesis":  "Medir los accesos correctos permite entender el uso y la disponibilidad del acceso.",
+                       "decision":  "Analizar actividad de acceso por sesión y ubicación.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "El acceso es un evento relevante para la seguridad y la actividad.",
+                       "properties":  {
+                                          "authentication_method":  {
+                                                                        "type":  "string",
+                                                                        "required":  true,
+                                                                        "description":  "Método de autenticación, sin incluir credenciales."
+                                                                    },
+                                          "result":  {
+                                                         "type":  "string",
+                                                         "required":  true,
+                                                         "description":  "Resultado de autenticación.",
+                                                         "enum":  [
+                                                                      "success"
+                                                                  ]
+                                                     }
+                                      }
+                   },
+                   {
+                       "event_type":  "login_failed",
+                       "category":  "authentication",
+                       "classification":  "additional",
+                       "trigger":  "Un intento de inicio de sesión falla.",
+                       "hypothesis":  "Los fallos pueden indicar problemas de acceso o intentos no autorizados.",
+                       "decision":  "Investigar patrones de fallos y mejorar la experiencia de acceso.",
+                       "delivery":  "stream",
+                       "delivery_justification":  "Los fallos de autenticación pueden tener relevancia operativa y de seguridad.",
+                       "properties":  {
+                                          "authentication_method":  {
+                                                                        "type":  "string",
+                                                                        "required":  true,
+                                                                        "description":  "Método de autenticación."
+                                                                    },
+                                          "failure_category":  {
+                                                                   "type":  "string",
+                                                                   "required":  true,
+                                                                   "description":  "Código genérico del motivo, sin datos de credenciales."
+                                                               }
+                                      }
+                   },
+                   {
+                       "event_type":  "credentials_rejected",
+                       "category":  "authentication",
+                       "classification":  "additional",
+                       "trigger":  "El sistema rechaza las credenciales proporcionadas.",
+                       "hypothesis":  "Los rechazos ayudan a detectar problemas de autenticación.",
+                       "decision":  "Revisar controles y mensajes de acceso sin almacenar credenciales.",
+                       "delivery":  "stream",
+                       "delivery_justification":  "Es un evento relacionado con seguridad y debe registrarse inmediatamente.",
+                       "properties":  {
+                                          "authentication_method":  {
+                                                                        "type":  "string",
+                                                                        "required":  true,
+                                                                        "description":  "Método de autenticación."
+                                                                    },
+                                          "rejection_category":  {
+                                                                     "type":  "string",
+                                                                     "required":  true,
+                                                                     "description":  "Código genérico de rechazo."
+                                                                 }
+                                      }
+                   },
+                   {
+                       "event_type":  "session_expired",
+                       "category":  "authentication",
+                       "classification":  "additional",
+                       "trigger":  "Una sesión caduca por tiempo o política.",
+                       "hypothesis":  "Las expiraciones permiten evaluar el impacto de las políticas de sesión.",
+                       "decision":  "Ajustar políticas de expiración y experiencia de acceso.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "El cierre por expiración afecta al flujo activo del usuario.",
+                       "properties":  {
+                                          "expiration_cause":  {
+                                                                   "type":  "string",
+                                                                   "required":  true,
+                                                                   "description":  "Motivo técnico de expiración."
+                                                               },
+                                          "session_duration":  {
+                                                                   "type":  "number",
+                                                                   "required":  true,
+                                                                   "description":  "Duración de la sesión en segundos.",
+                                                                   "enum":  [
+
+                                                                            ],
+                                                                   "minimum":  0
+                                                               }
+                                      }
+                   },
+                   {
+                       "event_type":  "session_ended",
+                       "category":  "authentication",
+                       "classification":  "additional",
+                       "trigger":  "Una sesión termina explícitamente.",
+                       "hypothesis":  "Los cierres permiten analizar la duración y finalización de sesiones.",
+                       "decision":  "Evaluar patrones de uso y duración de sesiones.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "Es un dato analítico que puede agruparse.",
+                       "properties":  {
+                                          "logout_origin":  {
+                                                                "type":  "string",
+                                                                "required":  true,
+                                                                "description":  "Motivo genérico de finalización."
+                                                            }
+                                      }
+                   },
+                   {
+                       "event_type":  "page_viewed",
+                       "category":  "navigation",
+                       "classification":  "additional",
+                       "trigger":  "Se visualiza una página o sección.",
+                       "hypothesis":  "Las vistas permiten conocer qué áreas de la aplicación se utilizan.",
+                       "decision":  "Mejorar navegación y priorizar secciones.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "Las vistas son eventos frecuentes y se prestan a análisis agregado.",
+                       "properties":  {
+                                          "page_id":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "description":  "Nombre lógico de la página, sin parámetros sensibles."
+                                                      },
+                                          "page_section":  {
+                                                               "type":  "string",
+                                                               "required":  true,
+                                                               "description":  "Categoría funcional de la página."
+                                                           }
+                                      }
+                   },
+                   {
+                       "event_type":  "api_latency_recorded",
+                       "category":  "performance",
+                       "classification":  "additional",
+                       "trigger":  "Se completa una petición API y se mide su duración.",
+                       "hypothesis":  "La latencia permite detectar operaciones lentas.",
+                       "decision":  "Priorizar optimizaciones de rendimiento.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "Las métricas de latencia pueden agregarse por endpoint y periodo.",
+                       "properties":  {
+                                          "duration_ms":  {
+                                                              "type":  "number",
+                                                              "required":  true,
+                                                              "minimum":  0,
+                                                              "description":  "Duración de la petición en milisegundos."
+                                                          },
+                                          "status_code":  {
+                                                              "type":  "integer",
+                                                              "required":  true,
+                                                              "description":  "Código HTTP de respuesta."
+                                                          },
+                                          "endpoint_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Grupo lógico del endpoint, sin URL con datos sensibles."
+                                                          },
+                                          "http_method":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Método HTTP utilizado.",
+                                                              "enum":  [
+                                                                           "GET",
+                                                                           "POST",
+                                                                           "PUT",
+                                                                           "PATCH",
+                                                                           "DELETE"
+                                                                       ]
+                                                          }
+                                      }
+                   },
+                   {
+                       "event_type":  "api_request_failed",
+                       "category":  "errors",
+                       "classification":  "additional",
+                       "trigger":  "Una petición API termina con error.",
+                       "hypothesis":  "Los errores permiten identificar endpoints y operaciones problemáticas.",
+                       "decision":  "Priorizar correcciones según frecuencia e impacto.",
+                       "delivery":  "stream",
+                       "delivery_justification":  "Los fallos pueden requerir diagnóstico operativo.",
+                       "properties":  {
+                                          "status_code":  {
+                                                              "type":  "integer",
+                                                              "required":  true,
+                                                              "description":  "Código HTTP de respuesta."
+                                                          },
+                                          "endpoint_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Grupo lógico del endpoint."
+                                                          },
+                                          "error_category":  {
+                                                                 "type":  "string",
+                                                                 "required":  true,
+                                                                 "description":  "Código técnico del error, sin datos personales."
+                                                             }
+                                      }
+                   },
+                   {
+                       "event_type":  "frontend_error_captured",
+                       "category":  "errors",
+                       "classification":  "additional",
+                       "trigger":  "La aplicación frontend captura un error.",
+                       "hypothesis":  "Los errores frontend pueden revelar fallos que afectan a la experiencia de usuario.",
+                       "decision":  "Priorizar correcciones según tipo y frecuencia del error.",
+                       "delivery":  "stream",
+                       "delivery_justification":  "Los errores deben estar disponibles para diagnóstico.",
+                       "properties":  {
+                                          "error_id":  {
+                                                           "type":  "string",
+                                                           "required":  true,
+                                                           "description":  "Código técnico del error."
+                                                       },
+                                          "component_id":  {
+                                                               "type":  "string",
+                                                               "required":  false,
+                                                               "description":  "Componente lógico donde se produjo."
+                                                           },
+                                          "error_category":  {
+                                                                 "type":  "string",
+                                                                 "required":  true,
+                                                                 "description":  "Categoría normalizada del error."
+                                                             },
+                                          "app_version":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Versión de la aplicación."
+                                                          }
+                                      }
+                   },
+                   {
+                       "event_type":  "page_load_completed",
+                       "category":  "performance",
+                       "classification":  "additional",
+                       "trigger":  "La carga de una página termina.",
+                       "hypothesis":  "Las métricas de carga permiten evaluar el rendimiento percibido.",
+                       "decision":  "Optimizar páginas con tiempos de carga elevados.",
+                       "delivery":  "batch",
+                       "delivery_justification":  "Las mediciones de carga se analizan mejor de forma agregada.",
+                       "properties":  {
+                                          "load_time_ms":  {
+                                                               "type":  "number",
+                                                               "required":  true,
+                                                               "minimum":  0,
+                                                               "description":  "Tiempo total de carga en milisegundos."
+                                                           },
+                                          "page_id":  {
+                                                          "type":  "string",
+                                                          "required":  true,
+                                                          "description":  "Nombre lógico de la página."
+                                                      },
+                                          "result":  {
+                                                         "type":  "string",
+                                                         "required":  true,
+                                                         "description":  "Resultado de la carga.",
+                                                         "enum":  [
+                                                                      "success",
+                                                                      "failure"
+                                                                  ]
+                                                     }
+                                      }
+                   },
+                   {
+                       "event_type":  "permission_denied",
+                       "category":  "authentication",
+                       "classification":  "additional",
+                       "trigger":  "Una operación se bloquea por falta de permisos.",
+                       "hypothesis":  "Los rechazos permiten detectar problemas de configuración de roles y permisos.",
+                       "decision":  "Revisar permisos y reducir bloqueos operativos indebidos.",
+                       "delivery":  "stream",
+                       "delivery_justification":  "Los bloqueos de acceso deben quedar registrados inmediatamente.",
+                       "properties":  {
+                                          "location_id":  {
+                                                              "type":  "string",
+                                                              "required":  false,
+                                                              "description":  "Identificador de la ubicación."
+                                                          },
+                                          "denial_reason":  {
+                                                                "type":  "string",
+                                                                "required":  true,
+                                                                "description":  "Motivo normalizado por el que se denegó la operación."
+                                                            },
+                                          "resource_id":  {
+                                                              "type":  "string",
+                                                              "required":  true,
+                                                              "description":  "Identificador permitido del recurso afectado."
+                                                          },
+                                          "operation_category":  {
+                                                                     "type":  "string",
+                                                                     "required":  true,
+                                                                     "description":  "Categoría de la operación denegada."
+                                                                 }
+                                      }
+                   }
+               ]
+}
