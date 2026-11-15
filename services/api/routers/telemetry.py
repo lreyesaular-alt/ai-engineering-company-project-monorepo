@@ -1,12 +1,19 @@
 ﻿
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
-from services.api.telemetry_models import TelemetryBatch
+from services.api.database import engine
+from services.api.telemetry_models import TelemetryEvent
 
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_PATH = (
     Path(__file__).resolve().parents[3]
@@ -27,6 +34,10 @@ router = APIRouter(
     prefix="/telemetry",
     tags=["telemetry"],
 )
+
+
+class TelemetryIncomingBatch(BaseModel):
+    events: list[Any] = Field(min_length=1, max_length=20)
 
 
 def validate_property_type(
@@ -84,7 +95,7 @@ def validate_property_type(
         )
 
 
-def validate_event(event: Any) -> None:
+def validate_event(event: TelemetryEvent) -> None:
     if event.schemaVersion != SCHEMA["schemaVersion"]:
         raise ValueError("Unsupported schemaVersion")
 
@@ -124,17 +135,99 @@ def validate_event(event: Any) -> None:
                 property_schema,
             )
 
+
+def event_to_row(event: TelemetryEvent) -> dict[str, Any]:
+    error_events = {
+        "login_failed",
+        "credentials_rejected",
+        "order_validation_failed",
+        "direct_stock_edit_rejected",
+        "api_request_failed",
+        "frontend_error_captured",
+        "permission_denied",
+    }
+
+    level = (
+        "error"
+        if event.event_type in error_events
+        else "info"
+    )
+
+    return {
+        "timestamp": event.timestamp,
+        "service": "brasaland-backoffice",
+        "event_type": event.event_type,
+        "level": level,
+        "value": None,
+        "message": None,
+        "tags": json.dumps(event.properties),
+    }
+
+
+INSERT_TELEMETRY_SQL = text(
+    """
+    INSERT INTO public.telemetry_events (
+        "timestamp",
+        service,
+        event_type,
+        level,
+        value,
+        message,
+        tags
+    )
+    VALUES (
+        :timestamp,
+        :service,
+        :event_type,
+        :level,
+        :value,
+        :message,
+        CAST(:tags AS jsonb)
+    )
+    """
+)
+
+
 @router.post("/events")
-def receive_telemetry(batch: TelemetryBatch):
-    try:
-        for event in batch.events:
+def receive_telemetry(batch: TelemetryIncomingBatch):
+    received = len(batch.events)
+    rejected = 0
+    valid_rows = []
+
+    for raw_event in batch.events:
+        try:
+            event = TelemetryEvent.model_validate(raw_event)
             validate_event(event)
+            valid_rows.append(event_to_row(event))
 
-    except ValueError as error:
+        except (ValidationError, ValueError, TypeError):
+            rejected += 1
+
+    if not valid_rows:
+        return {
+            "received": received,
+            "stored": 0,
+            "rejected": rejected,
+        }
+
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                INSERT_TELEMETRY_SQL,
+                valid_rows,
+            )
+
+    except SQLAlchemyError:
+        logger.exception(
+            "Failed to store telemetry batch"
+        )
         raise HTTPException(
-            status_code=422,
-            detail=str(error),
-        ) from error
+            status_code=503,
+            detail="Telemetry storage unavailable",
+        )
 
-    return {"received": len(batch.events)}
-
+    return {
+        "received": received,
+        "stored": len(valid_rows),
+        "rejected": rejected,
+    }
