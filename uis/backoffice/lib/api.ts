@@ -1,4 +1,5 @@
-﻿import { clearToken, getToken } from "./auth";
+﻿
+import { clearToken, getToken } from "./auth";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -33,7 +34,11 @@ export async function api(
   if (response.status === 401) {
     clearToken();
 
-    if (typeof window !== "undefined") {
+    // Evita un bucle de redirecciones cuando ya estamos en /login.
+    if (
+      typeof window !== "undefined" &&
+      window.location.pathname !== "/login"
+    ) {
       window.location.assign("/login");
     }
 
