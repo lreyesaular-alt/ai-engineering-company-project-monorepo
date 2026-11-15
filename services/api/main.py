@@ -13,6 +13,7 @@ from services.api.auth.users_routes import router as users_router
 from services.api.database import engine
 from services.api.models import Incident
 from services.api.routers.inventory import router as inventory_router
+from services.api.routers.telemetry import router as telemetry_router
 
 
 app = FastAPI(
@@ -31,6 +32,10 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:3003",
+        "http://127.0.0.1:3003",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -355,7 +360,10 @@ app.include_router(profiles_router)
 
 
 # ============================================================
-# ROUTER DE INVENTARIO
+# ROUTERS DE INVENTARIO Y TELEMETRÍA
 # ============================================================
 
 app.include_router(inventory_router)
+app.include_router(telemetry_router)
+
+
