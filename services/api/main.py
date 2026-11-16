@@ -1,4 +1,3 @@
-﻿
 from io import BytesIO
 
 import pandas as pd
@@ -13,6 +12,7 @@ from services.api.auth.users_routes import router as users_router
 from services.api.database import engine
 from services.api.models import Incident
 from services.api.routers.inventory import router as inventory_router
+from services.reporting.router import router as reporting_router
 
 
 app = FastAPI(
@@ -359,3 +359,4 @@ app.include_router(profiles_router)
 # ============================================================
 
 app.include_router(inventory_router)
+app.include_router(reporting_router)
