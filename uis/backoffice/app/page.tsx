@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -115,6 +115,13 @@ export default function Home() {
             </div>
 
             <div className="flex flex-wrap gap-3">
+              <Link
+                href="/reporting"
+                className="rounded-lg bg-black px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-zinc-800"
+              >
+                Desempe?o semanal
+              </Link>
+
               <Link
                 href="/incidents"
                 className="rounded-lg bg-black px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-zinc-800"
