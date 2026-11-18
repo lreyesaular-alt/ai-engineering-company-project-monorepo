@@ -33,14 +33,23 @@ def main() -> None:
     )
     parser.add_argument(
         "--week-start",
-        required=True,
+        required=False,
         type=parse_week_start,
-        help="Lunes de la semana a procesar (YYYY-MM-DD).",
+        help="Lunes de la semana a procesar (YYYY-MM-DD). Por defecto, la ultima semana completa.",
     )
     args = parser.parse_args()
 
-    print(f"Semana validada: {args.week_start.isoformat()}")
-    result = weekly_performance_flow(args.week_start.isoformat())
+    if args.week_start is None:
+        from datetime import datetime, timezone, timedelta
+
+        today_utc = datetime.now(timezone.utc).date()
+        current_monday = today_utc - timedelta(days=today_utc.weekday())
+        week_start = current_monday - timedelta(days=7)
+    else:
+        week_start = args.week_start
+
+    print(f"Semana validada: {week_start.isoformat()}")
+    result = weekly_performance_flow(week_start.isoformat())
     print(f"Filas procesadas: {result}")
 from prefect import flow, task
 from prefect.cache_policies import INPUTS
@@ -95,6 +104,128 @@ def extract_telemetry(week_start: str) -> list[dict]:
         return events
     finally:
         engine.dispose()
+
+
+@task(name="validate-telemetry-events", cache_policy=None)
+def validate_telemetry_events(events: list[dict]) -> list[dict]:
+    """Valida ubicacion, moneda y costos sin modificar los eventos."""
+    from decimal import Decimal, InvalidOperation
+
+    currencies = {"CO": "COP", "US": "USD"}
+
+    for event in events:
+        tags = event.get("tags") or {}
+        location_id = tags.get("location_id")
+        country = tags.get("country")
+        currency = tags.get("currency") or currencies.get(country)
+
+        if not location_id or country not in currencies:
+            raise ValueError("Evento sin ubicacion o pais valido.")
+
+        if currency != currencies[country]:
+            raise ValueError("Moneda incompatible con el pais.")
+
+        if event["event_type"] in (
+            "inbound_order_created",
+            "stock_waste_registered",
+        ):
+            raw_cost = tags.get("total_cost")
+
+            if raw_cost is None:
+                raise ValueError(
+                    f"Costo monetario faltante en {event['event_type']}; "
+                    f"location_id={location_id}"
+                )
+
+            try:
+                cost = Decimal(str(raw_cost))
+            except InvalidOperation as exc:
+                raise ValueError("Costo monetario invalido.") from exc
+
+            if not cost.is_finite() or cost < 0:
+                raise ValueError(
+                    "Costo monetario debe ser finito y no negativo."
+                )
+
+    return events
+
+
+@task(name="aggregate-weekly-events", cache_policy=None)
+def aggregate_weekly_events(events: list[dict]) -> list[dict]:
+    """Agrupa eventos validados por ubicacion y semana."""
+    from decimal import Decimal
+
+    grouped = {}
+    currencies = {"CO": "COP", "US": "USD"}
+
+    for event in events:
+        tags = event.get("tags") or {}
+        location_id = tags["location_id"]
+        country = tags["country"]
+        currency = tags.get("currency") or currencies[country]
+
+        event_date = event["timestamp"].date()
+        week_start = event_date.fromordinal(
+            event_date.toordinal() - event_date.weekday()
+        )
+
+        key = (location_id, week_start)
+
+        if key not in grouped:
+            grouped[key] = {
+                "location_id": location_id,
+                "country": country,
+                "currency": currency,
+                "week_start": week_start,
+                "total_purchase_cost": Decimal("0"),
+                "total_waste_cost": Decimal("0"),
+                "stockout_events_count": 0,
+                "price_alert_events_count": 0,
+            }
+
+        row = grouped[key]
+
+        if row["country"] != country or row["currency"] != currency:
+            raise ValueError(
+                "Pais o moneda inconsistente para la ubicacion."
+            )
+
+        event_type = event["event_type"]
+
+        if event_type == "inbound_order_created":
+            row["total_purchase_cost"] += Decimal(
+                str(tags["total_cost"])
+            )
+        elif event_type == "stock_waste_registered":
+            row["total_waste_cost"] += Decimal(
+                str(tags["total_cost"])
+            )
+        elif event_type == "stock_threshold_triggered":
+            row["stockout_events_count"] += 1
+        elif event_type == "ingredient_price_variance_detected":
+            row["price_alert_events_count"] += 1
+
+    return list(grouped.values())
+
+
+@task(name="calculate-weekly-ratios", cache_policy=None)
+def calculate_weekly_ratios(rows: list[dict]) -> list[dict]:
+    """Calcula la proporcion de desperdicio por ubicacion y semana."""
+    from decimal import Decimal
+
+    results = []
+
+    for row in rows:
+        purchases = row["total_purchase_cost"]
+        waste = row["total_waste_cost"]
+
+        result = row.copy()
+        result["waste_ratio"] = (
+            waste / purchases if purchases else Decimal("0")
+        )
+        results.append(result)
+
+    return results
 
 
 @task(
@@ -273,6 +404,44 @@ def optional_run_summary(week_start: str, row_count: int) -> None:
     )
 
 
+@flow(name="brasaland-extraction")
+def extraction_flow(week_start: str) -> list[dict]:
+    """Extrae eventos y advierte sobre semanas sin telemetria."""
+    from prefect import get_run_logger
+
+    logger = get_run_logger()
+    events = extract_telemetry(week_start)
+
+    if not events:
+        logger.warning(
+            "Sin eventos de telemetria para la semana %s. "
+            "Verificar cobertura antes de interpretar ausencia de actividad.",
+            week_start,
+        )
+
+    return events
+
+
+@flow(name="brasaland-transformation")
+def transformation_flow(events: list[dict]) -> list[dict]:
+    """Valida, agrupa y calcula los KPIs semanales."""
+    validated_events = validate_telemetry_events(events)
+    aggregated_rows = aggregate_weekly_events(validated_events)
+    return calculate_weekly_ratios(aggregated_rows)
+
+
+@flow(name="brasaland-loading")
+def loading_flow(rows: list[dict]) -> int:
+    """Carga los KPIs semanales de forma idempotente."""
+    return load_weekly_report(rows)
+
+
+@flow(name="brasaland-optional-summary")
+def optional_summary_flow(week_start: str, row_count: int) -> None:
+    """Ejecuta el resumen opcional sin modificar los KPIs."""
+    optional_run_summary(week_start, row_count)
+
+
 @flow(name="brasaland-weekly-performance")
 def weekly_performance_flow(week_start: str) -> int:
     """Ejecuta el ETL y registra su resultado en PostgreSQL."""
@@ -300,9 +469,9 @@ def weekly_performance_flow(week_start: str) -> int:
     )
 
     try:
-        events = extract_telemetry(week_start)
-        rows = transform_weekly_kpis(events)
-        row_count = load_weekly_report(rows)
+        events = extraction_flow(week_start)
+        rows = transformation_flow(events)
+        row_count = loading_flow(rows)
     except Exception as exc:
         try:
             finish_pipeline_run(
@@ -324,10 +493,19 @@ def weekly_performance_flow(week_start: str) -> int:
     )
 
     try:
-        optional_run_summary(week_start, row_count)
+        optional_state = optional_summary_flow(
+            week_start,
+            row_count,
+            return_state=True,
+        )
+        if not optional_state.is_completed():
+            logger.warning(
+                "Subflow opcional no completado: estado=%s",
+                optional_state.type,
+            )
     except Exception as exc:
         logger.warning(
-            "La tarea opcional fallo; el ETL principal termino: %s",
+            "El subflow opcional fallo; el ETL principal termino: %s",
             exc,
         )
 
