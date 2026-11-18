@@ -1,0 +1,9 @@
+# Brasaland: exportacion nocturna de telemetria
+# Horario: todos los dias a las 02:00 UTC
+# Instalar en Linux ajustando REPO_ROOT y PYTHON al entorno real.
+#
+# Ejemplo de instalacion:
+# crontab services/job_runner/nightly-export.cron
+
+CRON_TZ=UTC
+0 2 * * * cd /opt/brasaland && /opt/brasaland/.venv/bin/python -m scripts.nightly_export >> /opt/brasaland/nightly-export.log 2>&1
