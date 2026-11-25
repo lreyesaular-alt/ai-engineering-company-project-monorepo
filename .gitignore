@@ -9,3 +9,6 @@ services/api/.env
 services/api/brasaland.db
 services/api/auth/auth.json
 services/api/auth/profiles.json
+
+# Archivos temporales de tareas asincronas
+data/async_uploads/

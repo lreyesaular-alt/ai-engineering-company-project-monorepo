@@ -4,3 +4,5 @@ python-multipart
 pandas
 sqlmodel
 psycopg[binary]
+celery[redis]
+flower
