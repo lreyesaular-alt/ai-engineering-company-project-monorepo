@@ -306,3 +306,7 @@ This template was built as part of the 4Geeks Academy AI Engineering Career Prog
 You can find other templates and resources like this at the [4Geeks Academy GitHub page](https://github.com/4geeksacademy).
 
 _This template is maintained by 4Geeks Academy for the AI Engineering track. For exclusive use in the programme._
+
+## Async Tasks
+
+See [Celery, Redis and Flower documentation](docs/ASYNC_TASKS.md) for setup, monitoring, retries and DLQ.

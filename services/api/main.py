@@ -1,4 +1,4 @@
-﻿
+
 from io import BytesIO
 
 import pandas as pd
@@ -13,6 +13,7 @@ from services.api.auth.users_routes import router as users_router
 from services.api.database import engine
 from services.api.models import Incident
 from services.api.routers.inventory import router as inventory_router
+from services.api.routers.tasks import router as tasks_router
 
 
 app = FastAPI(
@@ -169,180 +170,66 @@ def incidents_summary():
 # INCIDENTS ANALYSIS
 # ============================================================
 
-@app.post("/api/incidents/analyze")
-async def analyze_incidents(
-    file: UploadFile = File(...),
-):
+@app.post(
+    "/api/incidents/analyze",
+    status_code=202,
+)
+async def analyze_incidents(file: UploadFile = File(...)):
+    from pathlib import Path
+    from uuid import uuid4
+
+    from services.tasks import analyze_incidents_csv_task
+
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(
             status_code=400,
             detail="El archivo debe ser un CSV.",
         )
 
+    upload_dir = Path("data/async_uploads").resolve()
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    file_path = upload_dir / f"{uuid4().hex}.csv"
+
+    max_size = 10 * 1024 * 1024
+    total_size = 0
+
     try:
-        contents = await file.read()
+        with file_path.open("wb") as destination:
+            while chunk := await file.read(1024 * 1024):
+                total_size += len(chunk)
 
-        if not contents.strip():
-            raise ValueError("El archivo está vacío.")
+                if total_size > max_size:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="El CSV supera el l?mite de 10 MB.",
+                    )
 
-        df = pd.read_csv(BytesIO(contents))
+                destination.write(chunk)
+
+        if total_size == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="El archivo est? vac?o.",
+            )
+
+        task = analyze_incidents_csv_task.delay(str(file_path))
+
+    except HTTPException:
+        file_path.unlink(missing_ok=True)
+        raise
 
     except Exception as error:
+        file_path.unlink(missing_ok=True)
         raise HTTPException(
-            status_code=400,
-            detail=f"No se pudo leer el CSV: {error}",
-        )
+            status_code=503,
+            detail="No se pudo enviar el an?lisis a Celery.",
+        ) from error
 
-    missing_columns = REQUIRED_COLUMNS - set(df.columns)
+    finally:
+        await file.close()
 
-    if missing_columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Faltan columnas: {sorted(missing_columns)}",
-        )
-
-    location_values = (
-        df["location_id"]
-        .astype("string")
-        .str.strip()
-    )
-
-    category_values = (
-        df["category"]
-        .astype("string")
-        .str.strip()
-    )
-
-    description_values = (
-        df["description"]
-        .astype("string")
-        .str.strip()
-    )
-
-    reporter_values = (
-        df["reporter_id"]
-        .astype("string")
-        .str.strip()
-    )
-
-    status_values = (
-        df["status"]
-        .astype("string")
-        .str.strip()
-    )
-
-    invalid_location = (
-        location_values.isna()
-        | ~location_values.isin(VALID_LOCATIONS)
-    )
-
-    invalid_category = (
-        category_values.isna()
-        | ~category_values.isin(VALID_CATEGORIES)
-    )
-
-    invalid_description = (
-        description_values.isna()
-        | (description_values.str.len() < 5)
-    )
-
-    invalid_reporter = (
-        reporter_values.isna()
-        | (reporter_values == "")
-    )
-
-    invalid_status = (
-        status_values.isna()
-        | ~status_values.isin(VALID_STATUSES)
-    )
-
-    score = pd.to_numeric(
-        df["satisfaction_score"],
-        errors="coerce",
-    )
-
-    missing_closed_score = (
-        (status_values == "CLOSED")
-        & score.isna()
-    )
-
-    invalid_score = (
-        score.notna()
-        & ~score.between(1, 5)
-    )
-
-    invalid_any = (
-        invalid_location
-        | invalid_category
-        | invalid_description
-        | invalid_reporter
-        | invalid_status
-        | missing_closed_score
-        | invalid_score
-    )
-
-    valid_df = df[~invalid_any].copy()
-
-    closed_df = valid_df[
-        status_values[~invalid_any] == "CLOSED"
-    ]
-
-    closed_scores = pd.to_numeric(
-        closed_df["satisfaction_score"],
-        errors="coerce",
-    )
-
-    average_satisfaction = (
-        round(
-            float(closed_scores.mean()),
-            2,
-        )
-        if not closed_scores.empty
-        else None
-    )
-
-    return {
-        "total_records": len(df),
-        "valid_records": len(valid_df),
-        "invalid_records": int(
-            invalid_any.sum()
-        ),
-        "invalid_breakdown": {
-            "invalid_location": int(
-                invalid_location.sum()
-            ),
-            "invalid_category": int(
-                invalid_category.sum()
-            ),
-            "invalid_description": int(
-                invalid_description.sum()
-            ),
-            "invalid_reporter": int(
-                invalid_reporter.sum()
-            ),
-            "invalid_status": int(
-                invalid_status.sum()
-            ),
-            "missing_closed_score": int(
-                missing_closed_score.sum()
-            ),
-            "invalid_score": int(
-                invalid_score.sum()
-            ),
-        },
-        "by_category": (
-            valid_df["category"]
-            .value_counts()
-            .to_dict()
-        ),
-        "by_status": (
-            valid_df["status"]
-            .value_counts()
-            .to_dict()
-        ),
-        "closed_incidents": len(closed_df),
-        "average_satisfaction": average_satisfaction,
-    }
+    return {"task_id": task.id}
 
 
 # ============================================================
@@ -359,3 +246,10 @@ app.include_router(profiles_router)
 # ============================================================
 
 app.include_router(inventory_router)
+
+
+# ============================================================
+# ROUTER DE TAREAS ASÍNCRONAS
+# ============================================================
+
+app.include_router(tasks_router)
